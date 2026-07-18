@@ -3,7 +3,7 @@
 Official website for **Panchakanya Oil Stores**, Thansing, Nuwakot, Nepal.
 
 - Premium petrol, diesel & quality lubricants  
-- Transparent pricing (Kathmandu NOC + Rs 0.75)  
+- Transparent pricing (Kathmandu NOC + Rs 1.50)  
 - Owner: Purushottam Pathak · Phone: 9841517156  
 
 ## Live site
