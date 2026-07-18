@@ -10,7 +10,7 @@ Official website for **Panchakanya Oil Stores**, Thansing, Nuwakot, Nepal.
 
 After GitHub Pages is enabled, the site will be available at:
 
-`https://umesh4125.github.io/panchakanya-oil-stores/`
+**https://umesh4125.github.io/panchakanya-website/**
 
 ## Local preview
 
