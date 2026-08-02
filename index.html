@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#c62828">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Panchakanya Oil Stores — Petrol Pump Sales & Inventory">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>Panchakanya Oil Stores</title>
+</head>
+<body>
+
+  <header class="header">
+    <h1>⛽ Panchakanya Oil Stores</h1>
+    <p>Petrol Pump Sales & Inventory</p>
+    <div class="status-bar">
+      <span class="status-dot"></span>
+      <span id="status-text">Connecting...</span>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <section id="page-dashboard" class="page active">
+      <div class="rate-grid" style="margin-bottom:12px">
+        <div class="rate-box">
+          <div class="label">Petrol</div>
+          <div class="price" id="rate-petrol">—</div>
+          <div class="sub" id="rate-noc-petrol">NOC: —</div>
+        </div>
+        <div class="rate-box diesel">
+          <div class="label">Diesel</div>
+          <div class="price" id="rate-diesel">—</div>
+          <div class="sub" id="rate-noc-diesel">NOC: —</div>
+        </div>
+      </div>
+      <p style="text-align:center;font-size:.72rem;color:#757575;margin-bottom:12px">
+        Rate effective: <span id="rate-date">—</span> · Kathmandu NOC + 0.75 NRs
+      </p>
+
+      <div class="filter-row">
+        <div class="form-group" style="margin:0">
+          <label>From</label>
+          <input type="date" id="filter-from">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>To</label>
+          <input type="date" id="filter-to">
+        </div>
+      </div>
+
+      <div class="kpi-grid" style="margin-bottom:12px">
+        <div class="kpi"><div class="val" id="kpi-total">0</div><div class="lbl">Total Revenue (NRs)</div></div>
+        <div class="kpi"><div class="val" id="kpi-trans">0</div><div class="lbl">Transactions</div></div>
+        <div class="kpi"><div class="val" id="kpi-fuel-rev">0</div><div class="lbl">Fuel Sales (NRs)</div></div>
+        <div class="kpi"><div class="val" id="kpi-lub-rev">0</div><div class="lbl">Lubricants (NRs)</div></div>
+        <div class="kpi"><div class="val" id="kpi-petrol">0 L</div><div class="lbl">Petrol Sold</div></div>
+        <div class="kpi"><div class="val" id="kpi-diesel">0 L</div><div class="lbl">Diesel Sold</div></div>
+      </div>
+
+      <div class="card">
+        <h2>Recent Fuel Sales</h2>
+        <div id="recent-fuel"><div class="empty">Loading...</div></div>
+      </div>
+      <div class="card">
+        <h2>Recent Lubricant Sales</h2>
+        <div id="recent-lub"><div class="empty">Loading...</div></div>
+      </div>
+      <button class="btn btn-secondary" id="refresh-btn">↻ Refresh Data</button>
+
+      <div class="card reset-card">
+        <h2>Reset Day</h2>
+        <p class="reset-note">Delete all fuel/lube sales and stock imports for one date. Pick any day to clear and re-enter.</p>
+        <div class="form-group">
+          <label>Date to reset</label>
+          <input type="date" id="reset-date">
+        </div>
+        <button type="button" class="btn btn-danger" id="reset-date-btn">Clear Entries for This Date</button>
+      </div>
+    </section>
+
+    <!-- FUEL SALE -->
+    <section id="page-fuel" class="page">
+      <div class="card">
+        <h2>New Fuel Sale</h2>
+        <form id="fuel-form">
+          <div class="form-group">
+            <label>Product</label>
+            <div class="product-toggle">
+              <button type="button" class="product-btn petrol active" data-product="Petrol">⛽ Petrol</button>
+              <button type="button" class="product-btn diesel" data-product="Diesel">🛢️ Diesel</button>
+            </div>
+          </div>
+          <div class="amount-preview">
+            <div class="label">Estimated Amount</div>
+            <div class="val" id="fuel-preview">0.00 NRs</div>
+          </div>
+          <div class="form-group">
+            <label>Quantity (Liters)</label>
+            <input type="number" id="fuel-qty" step="0.01" min="0.01" required placeholder="e.g. 5.00">
+          </div>
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" id="fuel-date" required>
+          </div>
+          <div class="form-group">
+            <label>Bill / Receipt No.</label>
+            <input type="text" id="fuel-bill" placeholder="Optional">
+          </div>
+          <div class="form-group">
+            <label>Vehicle / Customer</label>
+            <input type="text" id="fuel-customer" placeholder="Ba 1 Pa 2345">
+          </div>
+          <div class="form-group">
+            <label>Payment</label>
+            <select id="fuel-payment">
+              <option>Cash</option>
+              <option>Card</option>
+              <option>Credit</option>
+              <option>Fonepay</option>
+              <option>eSewa</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Shift</label>
+            <select id="fuel-shift">
+              <option>Morning</option>
+              <option selected>Day</option>
+              <option>Evening</option>
+              <option>Night</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Remarks</label>
+            <input type="text" id="fuel-remarks" placeholder="Optional">
+          </div>
+          <button type="submit" class="btn btn-primary" id="fuel-submit">Save to Excel</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- LUBRICANT SALE -->
+    <section id="page-lubricant" class="page">
+      <div class="card">
+        <h2>New Lubricant Sale</h2>
+        <form id="lub-form">
+          <div class="form-group">
+            <label>Item</label>
+            <select id="lub-item" required></select>
+          </div>
+          <div class="amount-preview">
+            <div class="label">Estimated Amount</div>
+            <div class="val" id="lub-preview">0.00 NRs</div>
+          </div>
+          <div class="form-group">
+            <label>Quantity</label>
+            <input type="number" id="lub-qty" step="1" min="1" required placeholder="e.g. 2">
+          </div>
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" id="lub-date" required>
+          </div>
+          <div class="form-group">
+            <label>Bill No.</label>
+            <input type="text" id="lub-bill" placeholder="Optional">
+          </div>
+          <div class="form-group">
+            <label>Customer</label>
+            <input type="text" id="lub-customer" placeholder="Optional">
+          </div>
+          <div class="form-group">
+            <label>Payment</label>
+            <select id="lub-payment">
+              <option>Cash</option>
+              <option>Card</option>
+              <option>Credit</option>
+              <option>Fonepay</option>
+              <option>eSewa</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Remarks</label>
+            <input type="text" id="lub-remarks" placeholder="Optional">
+          </div>
+          <button type="submit" class="btn btn-accent" id="lub-submit">Save to Excel</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- IMPORT -->
+    <section id="page-import" class="page">
+      <div class="card">
+        <h2>Stock Import / Delivery</h2>
+        <p style="font-size:.78rem;color:#757575;margin-bottom:12px">Record incoming fuel tanker or lubricant supplier delivery. Updates inventory automatically.</p>
+        <div class="import-type-toggle">
+          <button type="button" class="import-type-btn active" data-type="fuel">⛽ Fuel Tank</button>
+          <button type="button" class="import-type-btn" data-type="lubricant">🛢️ Lubricants</button>
+        </div>
+      </div>
+
+      <div id="import-fuel-panel" class="card">
+        <h2>Fuel Tank Import</h2>
+        <form id="fuel-import-form">
+          <div class="form-group">
+            <label>Product</label>
+            <div class="product-toggle">
+              <button type="button" class="product-btn petrol active import-fuel-prod" data-product="Petrol">⛽ Petrol</button>
+              <button type="button" class="product-btn diesel import-fuel-prod" data-product="Diesel">🛢️ Diesel</button>
+            </div>
+          </div>
+          <div class="amount-preview import-preview">
+            <div class="label">Inventory will increase by</div>
+            <div class="val" id="fuel-import-preview">0.00 L</div>
+          </div>
+          <div class="form-group">
+            <label>Quantity (Liters)</label>
+            <input type="number" id="fuel-import-qty" step="0.01" min="0.01" required placeholder="e.g. 5000">
+          </div>
+          <div class="form-group">
+            <label>Import Date</label>
+            <input type="date" id="fuel-import-date" required>
+          </div>
+          <div class="form-group">
+            <label>Invoice / Challan No.</label>
+            <input type="text" id="fuel-import-invoice" placeholder="NOC delivery note">
+          </div>
+          <div class="form-group">
+            <label>Supplier</label>
+            <input type="text" id="fuel-import-supplier" value="NOC / Depot" placeholder="NOC / Depot">
+          </div>
+          <div class="form-group">
+            <label>Remarks</label>
+            <input type="text" id="fuel-import-remarks" placeholder="Tanker no., driver, etc.">
+          </div>
+          <button type="submit" class="btn btn-primary" id="fuel-import-submit">Save to Inventory</button>
+        </form>
+      </div>
+
+      <div id="import-lub-panel" class="card" style="display:none">
+        <h2>Lubricant Stock Import</h2>
+        <form id="lub-import-form">
+          <div class="form-group">
+            <label>Item</label>
+            <select id="import-lub-item" required></select>
+          </div>
+          <div class="amount-preview import-preview">
+            <div class="label">Inventory will increase by</div>
+            <div class="val" id="lub-import-preview">0 units</div>
+          </div>
+          <div class="form-group">
+            <label>Quantity</label>
+            <input type="number" id="lub-import-qty" step="1" min="1" required placeholder="e.g. 24">
+          </div>
+          <div class="form-group">
+            <label>Import Date</label>
+            <input type="date" id="lub-import-date" required>
+          </div>
+          <div class="form-group">
+            <label>Invoice No.</label>
+            <input type="text" id="lub-import-invoice" placeholder="Supplier invoice">
+          </div>
+          <div class="form-group">
+            <label>Supplier</label>
+            <input type="text" id="lub-import-supplier" placeholder="Distributor name">
+          </div>
+          <div class="form-group">
+            <label>Unit Cost (NRs) — optional</label>
+            <input type="number" id="lub-import-cost" step="0.01" min="0" placeholder="Auto from Product Master">
+          </div>
+          <div class="form-group">
+            <label>Remarks</label>
+            <input type="text" id="lub-import-remarks" placeholder="Optional">
+          </div>
+          <button type="submit" class="btn btn-accent" id="lub-import-submit">Save to Inventory</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Recent Imports</h2>
+        <div id="recent-imports"><div class="empty">Loading...</div></div>
+      </div>
+    </section>
+
+    <!-- INVENTORY -->
+    <section id="page-inventory" class="page">
+      <div class="card">
+        <h2>Lubricants Stock</h2>
+        <div id="inv-lubricants"><div class="empty">Loading...</div></div>
+      </div>
+      <div class="card">
+        <h2>Fuel Tank Stock</h2>
+        <div id="inv-fuel"><div class="empty">Loading...</div></div>
+      </div>
+    </section>
+
+    <!-- MORE -->
+    <section id="page-more" class="page">
+      <div class="card">
+        <h2>Export Excel Files</h2>
+        <p style="font-size:.8rem;color:#757575;margin-bottom:12px">Download workbooks with all data entered via app and Excel.</p>
+        <div class="export-grid">
+          <a class="export-btn" href="/api/export/fuel" download>⛽ Fuel Sales & Inventory <span>↓</span></a>
+          <a class="export-btn" href="/api/export/lubricants" download>🛢️ Lubricants Workbook <span>↓</span></a>
+          <a class="export-btn" href="/api/export/summary" download>📊 Summary Dashboard <span>↓</span></a>
+          <a class="export-btn" href="/api/export/all" download>📦 Download All (ZIP) <span>↓</span></a>
+        </div>
+      </div>
+      <div class="card reset-card">
+        <h2>Manual Reset</h2>
+        <p class="reset-note">Clear data by date from Home, or reset everything below. Close Excel first.</p>
+        <div class="form-group">
+          <label>Reset date</label>
+          <input type="date" id="reset-date-more">
+        </div>
+        <button type="button" class="btn btn-danger" id="reset-date-more-btn">Clear Entries for This Date</button>
+        <button type="button" class="btn btn-danger-outline" id="reset-all-btn">Reset All Data (Fresh Start)</button>
+      </div>
+      <div class="card">
+        <h2>Connect from Mobile</h2>
+        <p style="font-size:.85rem;line-height:1.5">
+          1. Run <strong>START_APP.bat</strong> on this PC<br>
+          2. Connect phone to same Wi-Fi<br>
+          3. Open browser and go to:<br>
+          <strong id="mobile-url" style="color:#c62828;word-break:break-all">http://your-pc-ip:8000</strong><br>
+          4. Add to Home Screen for app-like experience
+        </p>
+      </div>
+      <div class="card">
+        <h2>How It Works</h2>
+        <p style="font-size:.82rem;line-height:1.6;color:#555">
+          Every sale entered on this app is written directly into your Excel workbooks in the <em>Petrol Pump</em> folder.
+          Open Excel and press <strong>F9</strong> or reopen the file to see updated values and formulas recalculate.
+          Keep Excel closed while entering sales for best sync.
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="nav">
+    <button class="nav-btn active" data-page="dashboard"><span class="icon">📊</span>Home</button>
+    <button class="nav-btn" data-page="fuel"><span class="icon">⛽</span>Fuel</button>
+    <button class="nav-btn" data-page="lubricant"><span class="icon">🛢️</span>Lube</button>
+    <button class="nav-btn" data-page="import"><span class="icon">📥</span>Import</button>
+    <button class="nav-btn" data-page="inventory"><span class="icon">📦</span>Stock</button>
+    <button class="nav-btn" data-page="more"><span class="icon">☰</span>More</button>
+  </nav>
+
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
