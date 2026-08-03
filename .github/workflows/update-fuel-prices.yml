@@ -52,9 +52,13 @@ jobs:
                   return resp.read().decode("utf-8", errors="replace")
 
           def parse(text: str):
-              # Prefer official history table (latest row) — banner can lag
+              # Prefer official history table (latest row) — banner can lag.
+              # Raw NOC HTML has multi-line <td> cells; allow wide gaps.
               table_pats = [
-                  r"\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*\(\s*(20\d{2}[./-]\d{1,2}[./-]\d{1,2})\s*\)[\s\S]{0,40}?(24\s*:\s*00|00\s*:\s*00|[\d:]+\s*hrs?)[\s\S]{0,40}?(\d{2,3}(?:\.\d{1,2})?)\s*[|\s]+\s*(\d{2,3}(?:\.\d{1,2})?)",
+                  # HTML: 2083.04.17(2026.08.02)</td> ... <td>24:00 hrs</td> ... 200.00 ... 200.00
+                  r"\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*\(\s*(20\d{2}[./-]\d{1,2}[./-]\d{1,2})\s*\)[\s\S]{0,300}?(24\s*:\s*00\s*hrs?|00\s*:\s*00\s*hrs?|[\d:]+\s*hrs?)[\s\S]{0,300}?(\d{2,3}(?:\.\d{1,2})?)[\s\S]{0,200}?(\d{2,3}(?:\.\d{1,2})?)",
+                  # Markdown/plain from jina reader
+                  r"\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*\(\s*(20\d{2}[./-]\d{1,2}[./-]\d{1,2})\s*\)[\s\S]{0,80}?(24\s*:\s*00|00\s*:\s*00|[\d:]+\s*hrs?)[\s\S]{0,80}?(\d{2,3}(?:\.\d{1,2})?)\s*[|\s]+\s*(\d{2,3}(?:\.\d{1,2})?)",
                   r"\|\s*\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*\(\s*(20\d{2}[./-]\d{1,2}[./-]\d{1,2})\s*\)\s*\|\s*([^|]+)\|\s*(\d{2,3}(?:\.\d{1,2})?)\s*\|\s*(\d{2,3}(?:\.\d{1,2})?)\s*\|",
               ]
               for pat in table_pats:
