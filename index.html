@@ -430,7 +430,11 @@
             to cover transportation and service. No hidden charges — ever.
           </p>
           <p class="text-sm text-slate-500 mt-3">
-            Last Updated: <time id="price-updated" class="font-medium text-forest-800"></time>
+            Last Updated: <time id="price-updated" class="font-medium text-forest-800">Loading…</time>
+          </p>
+          <p id="price-status" class="text-xs text-slate-500 mt-2 flex items-center justify-center gap-1.5" aria-live="polite">
+            <span id="price-status-dot" class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <span id="price-status-text">Fetching latest Kathmandu NOC rates…</span>
           </p>
         </div>
 
@@ -531,7 +535,8 @@
             <p class="text-sm text-slate-600 leading-relaxed">
               <strong>Our Price = Kathmandu NOC Rate + Rs. 1.50.</strong>
               This small addition covers transportation from the depot and our service to you in Thansing, Nuwakot.
-              When NOC revises Kathmandu prices, our rates update accordingly — always fair and transparent.
+              Prices on this website update <strong>automatically</strong> from Nepal Oil Corporation’s Kathmandu rate
+              whenever NOC revises petrol or diesel — always fair and transparent.
             </p>
           </div>
         </div>
@@ -747,52 +752,41 @@
 
   <script>
     /* ============================================================
-       FUEL PRICES — Update these when NOC revises Kathmandu rates
-       Source: Nepal Oil Corporation (Kathmandu / Pokhara / Dipayal)
+       AUTOMATIC FUEL PRICES
+       Our price = Kathmandu NOC rate + Rs 1.50
+       Live source: Nepal Oil Corporation (noc.org.np)
+       Fallbacks: prices.json → localStorage → hardcoded defaults
        ============================================================ */
-    const KATHMANDU_PETROL_PRICE = 197.0;  // NOC Kathmandu petrol (Rs/L)
-    const KATHMANDU_DIESEL_PRICE = 195.0;  // NOC Kathmandu diesel (Rs/L)
-    const TRANSPORT_MARGIN = 1.50;         // Rs. 1.50 over KTM NOC
+    const TRANSPORT_MARGIN = 1.50; // Always Rs 1.50 over Kathmandu NOC
+    const CACHE_KEY = 'panchakanya_noc_prices_v2';
+    const CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // re-fetch after 6 hours
+    const REFRESH_INTERVAL_MS = 60 * 60 * 1000;  // check again every hour while page is open
 
-    // Calculated local prices
-    const OUR_PETROL_PRICE = KATHMANDU_PETROL_PRICE + TRANSPORT_MARGIN;
-    const OUR_DIESEL_PRICE = KATHMANDU_DIESEL_PRICE + TRANSPORT_MARGIN;
+    // Defaults = latest known NOC Kathmandu revision (2026-08-02 24:00 NPT)
+    const FALLBACK_PETROL = 200.0;
+    const FALLBACK_DIESEL = 200.0;
+    const FALLBACK_EFFECTIVE_LABEL = '2 August 2026, 12:00 midnight (NPT)';
+
+    let kathmanduPetrol = FALLBACK_PETROL;
+    let kathmanduDiesel = FALLBACK_DIESEL;
+    let ourPetrol = FALLBACK_PETROL + TRANSPORT_MARGIN;
+    let ourDiesel = FALLBACK_DIESEL + TRANSPORT_MARGIN;
+    let priceSource = 'fallback';
+    let priceEffective = null;
 
     function formatPrice(n) {
-      // Show whole numbers without decimals when clean, else 2 decimals
-      return Number.isInteger(n) ? n.toFixed(0) : n.toFixed(2);
+      const x = Number(n);
+      if (!Number.isFinite(x)) return '—';
+      return Number.isInteger(x) || Math.abs(x - Math.round(x)) < 1e-9
+        ? String(Math.round(x))
+        : x.toFixed(2);
     }
 
     function formatMoney(n) {
-      return n.toLocaleString('en-NP', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-
-    function updatePriceUI() {
-      // Detailed price cards
-      setText('ktm-petrol', formatPrice(KATHMANDU_PETROL_PRICE));
-      setText('ktm-diesel', formatPrice(KATHMANDU_DIESEL_PRICE));
-      setText('our-petrol', formatPrice(OUR_PETROL_PRICE));
-      setText('our-diesel', formatPrice(OUR_DIESEL_PRICE));
-      setText('calc-petrol-line', formatPrice(KATHMANDU_PETROL_PRICE));
-      setText('calc-petrol-total', formatPrice(OUR_PETROL_PRICE));
-      setText('calc-diesel-line', formatPrice(KATHMANDU_DIESEL_PRICE));
-      setText('calc-diesel-total', formatPrice(OUR_DIESEL_PRICE));
-      setText('margin-display-p', formatPrice(TRANSPORT_MARGIN));
-      setText('margin-display-d', formatPrice(TRANSPORT_MARGIN));
-
-      // Hero strip
-      setText('hero-petrol', formatPrice(OUR_PETROL_PRICE));
-      setText('hero-diesel', formatPrice(OUR_DIESEL_PRICE));
-
-      // Last updated
-      const today = new Date();
-      const options = { year: 'numeric', month: 'long', day: 'numeric' };
-      setText('price-updated', today.toLocaleDateString('en-US', options));
-
-      // Year in footer
-      setText('year', String(today.getFullYear()));
-
-      updateCalculator();
+      return Number(n).toLocaleString('en-NP', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
     }
 
     function setText(id, value) {
@@ -800,10 +794,89 @@
       if (el) el.textContent = value;
     }
 
+    function setStatus(kind, message) {
+      const dot = document.getElementById('price-status-dot');
+      const text = document.getElementById('price-status-text');
+      if (!dot || !text) return;
+      dot.classList.remove('bg-amber-400', 'bg-emerald-500', 'bg-red-500', 'animate-pulse');
+      if (kind === 'loading') {
+        dot.classList.add('bg-amber-400', 'animate-pulse');
+      } else if (kind === 'live') {
+        dot.classList.add('bg-emerald-500');
+      } else if (kind === 'cached') {
+        dot.classList.add('bg-amber-400');
+      } else {
+        dot.classList.add('bg-red-500');
+      }
+      text.textContent = message;
+    }
+
+    function applyPrices(petrol, diesel, meta) {
+      kathmanduPetrol = Number(petrol);
+      kathmanduDiesel = Number(diesel);
+      if (!Number.isFinite(kathmanduPetrol) || !Number.isFinite(kathmanduDiesel)) return;
+
+      ourPetrol = +(kathmanduPetrol + TRANSPORT_MARGIN).toFixed(2);
+      ourDiesel = +(kathmanduDiesel + TRANSPORT_MARGIN).toFixed(2);
+      priceSource = meta.source || 'unknown';
+      priceEffective = meta.effective || meta.fetchedAt || new Date().toISOString();
+
+      // Persist for offline / next visit
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          petrol: kathmanduPetrol,
+          diesel: kathmanduDiesel,
+          source: priceSource,
+          effective: priceEffective,
+          fetchedAt: new Date().toISOString()
+        }));
+      } catch (_) { /* ignore quota / private mode */ }
+
+      updatePriceUI(meta);
+    }
+
+    function updatePriceUI(meta) {
+      meta = meta || {};
+
+      setText('ktm-petrol', formatPrice(kathmanduPetrol));
+      setText('ktm-diesel', formatPrice(kathmanduDiesel));
+      setText('our-petrol', formatPrice(ourPetrol));
+      setText('our-diesel', formatPrice(ourDiesel));
+      setText('calc-petrol-line', formatPrice(kathmanduPetrol));
+      setText('calc-petrol-total', formatPrice(ourPetrol));
+      setText('calc-diesel-line', formatPrice(kathmanduDiesel));
+      setText('calc-diesel-total', formatPrice(ourDiesel));
+      setText('margin-display-p', formatPrice(TRANSPORT_MARGIN));
+      setText('margin-display-d', formatPrice(TRANSPORT_MARGIN));
+      setText('hero-petrol', formatPrice(ourPetrol));
+      setText('hero-diesel', formatPrice(ourDiesel));
+
+      let dateLabel = '';
+      if (meta.effectiveLabel) {
+        dateLabel = meta.effectiveLabel;
+      } else if (priceEffective && !/^\d{4}-\d{2}-\d{2}T/.test(String(priceEffective))) {
+        // Human-readable NOC label already (e.g. "2 August 2026, 12:00 midnight (NPT)")
+        dateLabel = String(priceEffective);
+      } else {
+        const when = priceEffective ? new Date(priceEffective) : new Date();
+        dateLabel = Number.isNaN(when.getTime())
+          ? String(priceEffective)
+          : when.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      }
+      setText('price-updated', dateLabel);
+      setText('year', String(new Date().getFullYear()));
+
+      if (meta.statusKind && meta.statusMsg) {
+        setStatus(meta.statusKind, meta.statusMsg);
+      }
+
+      updateCalculator();
+    }
+
     function updateCalculator() {
       const type = document.getElementById('fuel-type')?.value || 'petrol';
       const liters = parseFloat(document.getElementById('liters')?.value) || 0;
-      const rate = type === 'diesel' ? OUR_DIESEL_PRICE : OUR_PETROL_PRICE;
+      const rate = type === 'diesel' ? ourDiesel : ourPetrol;
       const total = liters * rate;
       const label = type === 'diesel' ? 'Diesel' : 'Petrol';
 
@@ -813,6 +886,273 @@
           ? `${formatPrice(liters)} L × Rs ${formatPrice(rate)}/L (${label})`
           : 'Enter litres above'
       );
+    }
+
+    /** Format NOC effective date for display (AD date + 24:00 NPT midnight) */
+    function formatNocEffectiveLabel(adDate, timeHint) {
+      // adDate like 2026.08.02 or 2026-08-02
+      const parts = String(adDate).replace(/[./]/g, '-').split('-');
+      if (parts.length < 3) return String(adDate) + (timeHint ? ', ' + timeHint : '');
+      const y = parseInt(parts[0], 10);
+      const mo = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+      const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      const monthName = months[mo - 1] || parts[1];
+      const isMidnight = !timeHint || /24\s*:?\s*00|00\s*:?\s*00|midnight/i.test(timeHint);
+      if (isMidnight) {
+        return d + ' ' + monthName + ' ' + y + ', 12:00 midnight (NPT)';
+      }
+      return d + ' ' + monthName + ' ' + y + ', ' + timeHint + ' (NPT)';
+    }
+
+    /**
+     * Parse Kathmandu petrol & diesel from NOC (or mirrored) HTML/text.
+     * Prefer the official retail price TABLE (latest row) — the page banner is often stale.
+     * Table columns: effective Date | effective Time | petrol | diesel | kerosene | ...
+     */
+    function parseNocKathmanduPrices(text) {
+      if (!text || typeof text !== 'string') return null;
+
+      // 1) Latest row of NOC retail selling price history table
+      // e.g. 2083.04.17(2026.08.02) | 24:00 hrs | 200.00 | 200.00 | 200.00 | ...
+      let m = text.match(
+        /\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*\(\s*(20\d{2}[./-]\d{1,2}[./-]\d{1,2})\s*\)[\s\S]{0,40}?(24\s*:\s*00|00\s*:\s*00|[\d:]+\s*hrs?)[\s\S]{0,40}?(\d{2,3}(?:\.\d{1,2})?)\s*[|\s]+\s*(\d{2,3}(?:\.\d{1,2})?)\s*[|\s]+\s*(\d{2,3}(?:\.\d{1,2})?)/i
+      );
+      if (m) {
+        const petrol = parseFloat(m[3]);
+        const diesel = parseFloat(m[4]);
+        if (petrol >= 50 && petrol <= 500 && diesel >= 50 && diesel <= 500) {
+          return {
+            petrol,
+            diesel,
+            effectiveLabel: formatNocEffectiveLabel(m[1], m[2]),
+            effectiveDateAd: m[1]
+          };
+        }
+      }
+
+      // Markdown / plain table: | 2083.04.17(2026.08.02) | 24:00 hrs | 200.00 | 200.00 |
+      m = text.match(
+        /\|\s*\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*\(\s*(20\d{2}[./-]\d{1,2}[./-]\d{1,2})\s*\)\s*\|\s*([^|]+)\|\s*(\d{2,3}(?:\.\d{1,2})?)\s*\|\s*(\d{2,3}(?:\.\d{1,2})?)\s*\|/i
+      );
+      if (m) {
+        const petrol = parseFloat(m[3]);
+        const diesel = parseFloat(m[4]);
+        if (petrol >= 50 && petrol <= 500 && diesel >= 50 && diesel <= 500) {
+          return {
+            petrol,
+            diesel,
+            effectiveLabel: formatNocEffectiveLabel(m[1], m[2].trim()),
+            effectiveDateAd: m[1]
+          };
+        }
+      }
+
+      // 2) Region banner: "Kathmandu, Pokhara, Dipayal) Petrol(MS):NRs … Diesel(HSD):NRs …"
+      // (can lag behind the table — used only if table parse fails)
+      m = text.match(
+        /Kathmandu[\s\S]{0,120}?Petrol\s*\(MS\)\s*:?\s*NRs?\s*([\d.]+)\s*\/?\s*L[\s\S]{0,160}?Diesel\s*\(HSD\)\s*:?\s*NRs?\s*([\d.]+)\s*\/?\s*L/i
+      );
+      if (m) {
+        return { petrol: parseFloat(m[1]), diesel: parseFloat(m[2]) };
+      }
+
+      // 3) Alternate list layout "Petrol(MS) Per litre Rs 200"
+      m = text.match(
+        /Kathmandu[,\s]+Pokhara[,\s]+Dipayal[\s\S]{0,500}?Petrol\s*\(MS\)[\s\S]{0,40}?Rs\.?\s*([\d.]+)[\s\S]{0,200}?Diesel\s*\(HSD\)[\s\S]{0,40}?Rs\.?\s*([\d.]+)/i
+      );
+      if (m) {
+        return { petrol: parseFloat(m[1]), diesel: parseFloat(m[2]) };
+      }
+
+      return null;
+    }
+
+    async function fetchText(url, timeoutMs) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs || 20000);
+      try {
+        const res = await fetch(url, {
+          signal: controller.signal,
+          cache: 'no-store',
+          headers: { Accept: 'text/plain, text/html, application/json, */*' }
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.text();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function fetchJson(url, timeoutMs) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
+      try {
+        const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    /** Live fetch: NOC via text reader (CORS-friendly), then Ashesh mirror */
+    async function fetchLiveNocPrices() {
+      const sources = [
+        {
+          name: 'NOC via reader',
+          url: 'https://r.jina.ai/http://noc.org.np/retailprice',
+          parse: parseNocKathmanduPrices
+        },
+        {
+          name: 'NOC via reader (https)',
+          url: 'https://r.jina.ai/https://noc.org.np/retailprice',
+          parse: parseNocKathmanduPrices
+        },
+        {
+          name: 'Ashesh fuel rates',
+          url: 'https://r.jina.ai/https://www.ashesh.com.np/fuel/',
+          parse: parseNocKathmanduPrices
+        }
+      ];
+
+      let lastError = null;
+      for (const src of sources) {
+        try {
+          const text = await fetchText(src.url, 22000);
+          const prices = src.parse(text);
+          if (
+            prices &&
+            prices.petrol >= 50 && prices.petrol <= 500 &&
+            prices.diesel >= 50 && prices.diesel <= 500
+          ) {
+            return {
+              petrol: prices.petrol,
+              diesel: prices.diesel,
+              source: src.name,
+              effective: prices.effectiveLabel || new Date().toISOString(),
+              effectiveLabel: prices.effectiveLabel || null
+            };
+          }
+          lastError = new Error('Could not parse prices from ' + src.name);
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      throw lastError || new Error('All live price sources failed');
+    }
+
+    /** Same-origin prices.json (kept current by GitHub Action) */
+    async function fetchLocalPricesJson() {
+      const data = await fetchJson('prices.json', 8000);
+      if (data && data.kathmandu) {
+        return {
+          petrol: Number(data.kathmandu.petrol),
+          diesel: Number(data.kathmandu.diesel),
+          source: data.source || 'prices.json',
+          effective: data.effective_label || data.effective || data.updated || new Date().toISOString(),
+          effectiveLabel: data.effective_label || null
+        };
+      }
+      if (data && data.petrol != null && data.diesel != null) {
+        return {
+          petrol: Number(data.petrol),
+          diesel: Number(data.diesel),
+          source: data.source || 'prices.json',
+          effective: data.effective_label || data.effective || data.updated || new Date().toISOString(),
+          effectiveLabel: data.effective_label || null
+        };
+      }
+      throw new Error('Invalid prices.json');
+    }
+
+    function readCache() {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        if (!data || data.petrol == null || data.diesel == null) return null;
+        return data;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function cacheIsFresh(data) {
+      if (!data || !data.fetchedAt) return false;
+      const age = Date.now() - new Date(data.fetchedAt).getTime();
+      return Number.isFinite(age) && age >= 0 && age < CACHE_MAX_AGE_MS;
+    }
+
+    async function loadPrices(options) {
+      const force = options && options.force;
+      setStatus('loading', 'Fetching latest Kathmandu NOC rates…');
+
+      // 1) Show cache immediately (if any) so UI is never blank
+      const cached = readCache();
+      if (cached && !force) {
+        applyPrices(cached.petrol, cached.diesel, {
+          source: cached.source || 'cache',
+          effective: cached.effective || cached.fetchedAt,
+          statusKind: 'cached',
+          statusMsg: 'Showing saved rates — checking for NOC updates…'
+        });
+      } else {
+        applyPrices(FALLBACK_PETROL, FALLBACK_DIESEL, {
+          source: 'fallback',
+          effective: FALLBACK_EFFECTIVE_LABEL,
+          effectiveLabel: FALLBACK_EFFECTIVE_LABEL,
+          statusKind: 'loading',
+          statusMsg: 'Fetching latest Kathmandu NOC rates…'
+        });
+      }
+
+      // 2) Prefer live NOC (auto when corporation changes prices)
+      try {
+        if (!force && cacheIsFresh(cached)) {
+          setStatus('live', 'Live-linked: Our price = Kathmandu NOC + Rs 1.50 (cached today)');
+          // Still refresh in background if cache is older than 1 hour
+          const age = Date.now() - new Date(cached.fetchedAt).getTime();
+          if (age < 60 * 60 * 1000) return;
+        }
+
+        const live = await fetchLiveNocPrices();
+        applyPrices(live.petrol, live.diesel, {
+          source: live.source,
+          effective: live.effective,
+          effectiveLabel: live.effectiveLabel || null,
+          statusKind: 'live',
+          statusMsg: 'Live from Nepal Oil Corporation · Our price = KTM NOC + Rs 1.50'
+        });
+        return;
+      } catch (liveErr) {
+        console.warn('Live NOC fetch failed:', liveErr);
+      }
+
+      // 3) prices.json (GitHub Action / manual sync)
+      try {
+        const file = await fetchLocalPricesJson();
+        applyPrices(file.petrol, file.diesel, {
+          source: file.source,
+          effective: file.effective,
+          effectiveLabel: file.effectiveLabel || null,
+          statusKind: 'cached',
+          statusMsg: 'From site price file · Our price = KTM NOC + Rs 1.50'
+        });
+        return;
+      } catch (fileErr) {
+        console.warn('prices.json unavailable:', fileErr);
+      }
+
+      // 4) Keep whatever we already showed (cache or fallback)
+      if (cached) {
+        setStatus('cached', 'Offline / source unavailable — showing last saved NOC rates + Rs 1.50');
+      } else {
+        setStatus('error', 'Could not reach NOC right now — showing reference rates + Rs 1.50');
+      }
     }
 
     // Mobile menu
@@ -851,8 +1191,9 @@
       }
     }, { passive: true });
 
-    // Init
-    updatePriceUI();
+    // Init prices + periodic refresh while the page stays open
+    loadPrices();
+    setInterval(() => loadPrices({ force: false }), REFRESH_INTERVAL_MS);
   </script>
 </body>
 </html>
