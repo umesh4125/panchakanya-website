@@ -1,10 +1,10 @@
 {
   "source": "Nepal Oil Corporation (Kathmandu, Pokhara, Dipayal)",
-  "updated": "2026-08-03T13:50:00.000Z",
-  "effective": "2026-08-02T18:15:00.000Z",
-  "effective_npt": "2026-08-02 24:00 NPT (12:00 midnight)",
+  "fetched_from": "https://noc.org.np/retailprice",
+  "updated": "2026-08-03T13:47:26Z",
+  "effective": "2026-08-03T13:47:26Z",
+  "effective_npt": "2026.08.02 24:00 hrs",
   "effective_label": "2 August 2026, 12:00 midnight (NPT)",
-  "noc_bs_date": "2083.04.17",
   "noc_ad_date": "2026.08.02",
   "kathmandu": {
     "petrol": 200.0,
@@ -15,5 +15,5 @@
     "petrol": 201.5,
     "diesel": 201.5
   },
-  "note": "NOC revised rates effective 2026-08-02 24:00 hrs NPT. Panchakanya = Kathmandu NOC + Rs 1.50."
+  "note": "Panchakanya Oil Stores price = Kathmandu NOC + Rs 1.50"
 }
